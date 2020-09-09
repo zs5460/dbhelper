@@ -1,4 +1,4 @@
-module dbhelper
+module github.com/zs5460/dbhelper
 
 go 1.15
 
