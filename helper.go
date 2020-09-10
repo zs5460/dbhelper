@@ -3,6 +3,7 @@ package dbhelper
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -28,9 +29,9 @@ func PageCount(total, pagesize int) int {
 
 // BuildSQL ...
 func BuildSQL(fields, table, where, orderby string, pageSize, pageNum int) string {
-	tmpValue := ""
-	if where != "" {
-		where = " WHERE " + where
+	sql := ""
+	if strings.TrimSpace(where) == "" {
+		where = " 1=1 "
 	}
 	if pageNum < 1 {
 		pageNum = 1
@@ -39,21 +40,24 @@ func BuildSQL(fields, table, where, orderby string, pageSize, pageNum int) strin
 		pageSize = DefaultPageSize
 	}
 	if pageNum == 1 {
-		tmpValue = fmt.Sprintf("SELECT TOP %d %s FROM %s %s ORDER BY %s DESC", pageSize, fields, table, where, orderby)
+		sql = fmt.Sprintf("SELECT TOP %d %s FROM %s WHERE %s ORDER BY %s DESC", pageSize, fields, table, where, orderby)
 	} else {
-		tmpValue = "SELECT " + fields + " FROM " + table + " WHERE " + orderby +
-			" IN (SELECT TOP " + strconv.Itoa(pageSize) + " " + orderby + " FROM (SELECT TOP " + strconv.Itoa(pageSize*pageNum) + " " + orderby + " FROM " + table + " " + where + " ORDER BY " + orderby + " DESC) t1 ORDER BY " + orderby + " ASC) ORDER BY " + orderby + " DESC"
+		sql = "SELECT " + fields + " FROM " + table + " WHERE " + orderby +
+			" IN (SELECT TOP " + strconv.Itoa(pageSize) + " " + orderby + " FROM (SELECT TOP " + strconv.Itoa(pageSize*pageNum) + " " + orderby + " FROM " + table + " WHERE " + where + " ORDER BY " + orderby + " DESC) t1 ORDER BY " + orderby + " ASC) ORDER BY " + orderby + " DESC"
 	}
-	return tmpValue
+	return sql
 }
 
 // GetPage ...
-func GetPage(db *sqlx.DB, fields, table, where, orderby string, pageSize, pageNum int) (data []interface{}, err error) {
+func GetPage(db *sqlx.DB, data interface{}, fields, table, where, orderby string, pageSize, pageNum int) (err error) {
+	if strings.TrimSpace(where) == "" {
+		where = " 1=1 "
+	}
 	sql := "SELECT COUNT(0) FROM " + table + " WHERE " + where
 	count := 0
 	err = db.Get(&count, sql)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	pageCount := PageCount(count, pageSize)
 	if pageNum < 1 {
@@ -63,6 +67,6 @@ func GetPage(db *sqlx.DB, fields, table, where, orderby string, pageSize, pageNu
 		pageNum = pageCount
 	}
 	sql = BuildSQL(fields, table, where, orderby, pageSize, pageNum)
-	err = db.Select(&data, sql)
+	err = db.Select(data, sql)
 	return
 }
