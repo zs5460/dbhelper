@@ -2,7 +2,6 @@ package dbhelper
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -13,43 +12,40 @@ var (
 	MaxPageSize     = 10000
 )
 
-// PageCount ...
-func PageCount(total, pagesize int) int {
+func countPage(total, pageSize int) int {
 	if total < 1 {
 		return 0
 	}
-	if pagesize < 1 {
-		pagesize = 1
+	if pageSize < 1 {
+		pageSize = 1
 	}
-	if total%pagesize == 0 {
-		return total / pagesize
+	if total%pageSize == 0 {
+		return total / pageSize
 	}
-	return total/pagesize + 1
+	return total/pageSize + 1
 }
 
-// BuildSQL ...
-func BuildSQL(fields, table, where, orderby string, pageSize, pageNum int) string {
+func buildSQL(fields, table, where, orderby string, pageSize, pageIndex int) string {
 	sql := ""
 	if strings.TrimSpace(where) == "" {
 		where = " 1=1 "
 	}
-	if pageNum < 1 {
-		pageNum = 1
+	if pageIndex < 1 {
+		pageIndex = 1
 	}
 	if pageSize < 1 || pageSize > MaxPageSize {
 		pageSize = DefaultPageSize
 	}
-	if pageNum == 1 {
+	if pageIndex == 1 {
 		sql = fmt.Sprintf("SELECT TOP %d %s FROM %s WHERE %s ORDER BY %s DESC", pageSize, fields, table, where, orderby)
 	} else {
-		sql = "SELECT " + fields + " FROM " + table + " WHERE " + orderby +
-			" IN (SELECT TOP " + strconv.Itoa(pageSize) + " " + orderby + " FROM (SELECT TOP " + strconv.Itoa(pageSize*pageNum) + " " + orderby + " FROM " + table + " WHERE " + where + " ORDER BY " + orderby + " DESC) t1 ORDER BY " + orderby + " ASC) ORDER BY " + orderby + " DESC"
+		sql = fmt.Sprintf("SELECT %s FROM %s WHERE %s IN (SELECT TOP %d %s FROM (SELECT TOP %d %s FROM %s WHERE %s ORDER BY %s DESC) t1 ORDER BY %s ASC) ORDER BY %s DESC", fields, table, orderby, pageSize, orderby, pageSize*pageIndex, orderby, table, where, orderby, orderby, orderby)
 	}
 	return sql
 }
 
 // GetPage ...
-func GetPage(db *sqlx.DB, data interface{}, fields, table, where, orderby string, pageSize, pageNum int) (err error) {
+func GetPage(db *sqlx.DB, data interface{}, fields, table, where, orderby string, pageSize, pageIndex int) (err error) {
 	if strings.TrimSpace(where) == "" {
 		where = " 1=1 "
 	}
@@ -59,14 +55,14 @@ func GetPage(db *sqlx.DB, data interface{}, fields, table, where, orderby string
 	if err != nil {
 		return err
 	}
-	pageCount := PageCount(count, pageSize)
-	if pageNum < 1 {
-		pageNum = 1
+	pages := countPage(count, pageSize)
+	if pageIndex < 1 {
+		pageIndex = 1
 	}
-	if pageNum > pageCount {
-		pageNum = pageCount
+	if pageIndex > pages {
+		pageIndex = pages
 	}
-	sql = BuildSQL(fields, table, where, orderby, pageSize, pageNum)
+	sql = buildSQL(fields, table, where, orderby, pageSize, pageIndex)
 	err = db.Select(data, sql)
 	return
 }
